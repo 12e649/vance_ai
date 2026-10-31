@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vance AI</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0d12;--panel:#141821;--line:#262c38;--text:#f4f6fb;--muted:#a6afbf;--accent:#8b7cff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#1b1c35 0,#0b0d12 50%);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+header{padding:20px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#0b0d12eF;backdrop-filter:blur(10px);z-index:2}
+.wrap{max-width:900px;margin:auto}header .brand{font-size:23px;font-weight:800;letter-spacing:.2px}header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+main{max-width:900px;margin:auto;padding:22px 16px 42px}.tabs{display:flex;gap:8px;margin-bottom:16px}.tab{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:11px 15px;border-radius:12px;cursor:pointer}.tab.active{background:var(--accent);border-color:var(--accent);color:white}
+.card{background:#121620eF;border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px;box-shadow:0 10px 30px #0002}.card h2{font-size:19px;margin:0 0 6px}.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+textarea,input{width:100%;background:#0b0e14;color:var(--text);border:1px solid #343b4a;border-radius:12px;padding:13px;font:inherit;outline:none}textarea:focus,input:focus{border-color:var(--accent)}textarea{min-height:105px;resize:vertical}
+button.primary{background:var(--accent);color:white;border:0;border-radius:12px;padding:12px 16px;font:inherit;font-weight:700;cursor:pointer;margin-top:10px}button:disabled{opacity:.55;cursor:wait}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row button{flex-shrink:0}
+#chatLog{display:flex;flex-direction:column;gap:12px;margin:16px 0}.bubble{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 14px;border-radius:14px;max-width:100%;line-height:1.5}.user{background:#282448;align-self:flex-end}.assistant{background:#1a202c;border:1px solid var(--line);align-self:flex-start}
+#imageResult img{width:100%;max-height:650px;object-fit:contain;border-radius:14px;margin-top:14px;background:#08090d}#status{color:var(--muted);font-size:13px;margin-top:10px;min-height:18px}.hidden{display:none}.hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:12px}footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 26px}
+</style>
+</head>
+<body>
+<header><div class="wrap"><div class="brand">✦ Vance AI</div><p>Your AI chat and image studio</p></div></header>
+<main>
+  <div class="tabs"><button class="tab active" data-panel="chatPanel">AI Chat</button><button class="tab" data-panel="imagePanel">Image Generator</button></div>
+  <section class="card" id="chatPanel">
+    <h2>Ask Vance AI</h2><p class="sub">Ask questions, brainstorm ideas, or get help with writing and coding.</p>
+    <div id="chatLog" aria-live="polite"><div class="bubble assistant">Hi! I'm Vance AI. What would you like help with?</div></div>
+    <textarea id="chatInput" placeholder="Type your question..."></textarea>
+    <div class="row"><button class="primary" id="sendBtn">Send message</button><button class="tab" id="clearBtn">Clear chat</button></div>
+    <div class="hint">Responses use your configured Runware text model. API keys stay on the server.</div>
+  </section>
+  <section class="card hidden" id="imagePanel">
+    <h2>Create an AI image</h2><p class="sub">Describe the image you want to generate.</p>
+    <textarea id="imagePrompt" placeholder="Example: a futuristic African city at sunset, cinematic lighting, detailed digital art"></textarea>
+    <div class="row"><button class="primary" id="generateBtn">Generate image</button></div>
+    <div id="imageStatus" role="status"></div><div id="imageResult"></div>
+    <div class="hint">Image generation may use account credits or incur charges, depending on your Runware account and selected model.</div>
+  </section>
+</main>
+<footer>Vance AI • Keep API keys private. Generated results may take a little time.</footer>
+<script>
+const $ = id => document.getElementById(id);
+document.querySelectorAll('.tab[data-panel]').forEach(btn=>btn.addEventListener('click',()=>{
+ document.querySelectorAll('.tab[data-panel]').forEach(b=>b.classList.toggle('active',b===btn));
+ ['chatPanel','imagePanel'].forEach(id=>$(id).classList.toggle('hidden',id!==btn.dataset.panel));
+}));
+function bubble(text, role){const div=document.createElement('div');div.className='bubble '+role;div.textContent=text;$('chatLog').appendChild(div);div.scrollIntoView({behavior:'smooth',block:'end'});return div;}
+$('sendBtn').addEventListener('click',sendChat);
+$('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}});
+$('clearBtn').addEventListener('click',()=>{$('chatLog').replaceChildren();bubble('Chat cleared. What would you like to ask?','assistant');});
+async function sendChat(){
+ const input=$('chatInput'), prompt=input.value.trim();if(!prompt)return;
+ bubble(prompt,'user');input.value='';const waiting=bubble('Thinking…','assistant');$('sendBtn').disabled=true;
+ try{
+  const history=[...$('chatLog').querySelectorAll('.bubble')].slice(0,-1).map(el=>({role:el.classList.contains('user')?'user':'assistant',content:el.textContent}));
+  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:history})});
+  const data=await res.json();if(!res.ok)throw new Error(data.error||'Request failed');waiting.textContent=data.reply||'No response returned.';
+ }catch(err){waiting.textContent='Sorry, something went wrong: '+err.message;}
+ finally{$('sendBtn').disabled=false;input.focus();}
+}
+$('generateBtn').addEventListener('click',async()=>{
+ const prompt=$('imagePrompt').value.trim();if(!prompt)return;
+ $('generateBtn').disabled=true;$('imageStatus').textContent='Generating… please wait.';$('imageResult').replaceChildren();
+ try{
+  const res=await fetch('/api/image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+  const data=await res.json();if(!res.ok)throw new Error(data.error||'Image generation failed');
+  const img=document.createElement('img');img.src=data.imageURL;img.alt=prompt;$('imageResult').appendChild(img);
+  const link=document.createElement('a');link.href=data.imageURL;link.target='_blank';link.rel='noopener';link.textContent='Open image in a new tab';link.style.display='inline-block';link.style.marginTop='10px';link.style.color='#c6bfff';$('imageResult').appendChild(link);
+  $('imageStatus').textContent='Image ready.';
+ }catch(err){$('imageStatus').textContent='Sorry, something went wrong: '+err.message;}
+ finally{$('generateBtn').disabled=false;}
+});
+</script>
+</body>
+</html>
